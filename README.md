@@ -32,9 +32,6 @@ Neste projeto essas regras são **invariantes do banco de dados**, garantidas po
 - [Contrato de erro](#contrato-de-erro)
 - [Como executar os testes](#como-executar-os-testes)
 - [Modelagem](#modelagem)
-- [Arquitetura](#arquitetura)
-- [Decisões e o que deliberadamente não foi feito](#decisões-e-o-que-deliberadamente-não-foi-feito)
-- [Stack](#stack)
 
 ---
 
@@ -54,7 +51,7 @@ Portas usadas: `8080` (API), `8081` (Swagger UI) e `5432` (Postgres). Se alguma 
 ### 1. Clone o repositório
 
 ```bash
-git clone <url-do-repositorio>
+git clone https://github.com/viniciusdevlacerda/hospital-beds-api.git
 cd hospital-beds-api
 ```
 
@@ -378,5 +375,3 @@ Esse é o ponto central do projeto. Uma checagem em PHP entre o `SELECT` e o `IN
 Em cima disso, cada comando roda numa transação com `SELECT ... FOR UPDATE` no leito e no paciente, para que requisições concorrentes sejam serializadas e o cliente receba um `409` legível em vez de um erro de constraint.
 
 Índice único parcial existe em PostgreSQL e em SQLite, então a suíte de testes — que roda em SQLite em memória — valida exatamente as mesmas invariantes que rodam em produção.
-
----
