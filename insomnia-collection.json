@@ -1,0 +1,298 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-09-21T14:15:15.000Z",
+  "__export_source": "hospital-beds-api",
+  "resources": [
+    {
+      "_id": "wrk_hospital_beds",
+      "_type": "workspace",
+      "parentId": null,
+      "name": "Hospital Beds API",
+      "description": "Uma requisição por rota da API, na ordem em que o desafio lista os casos de uso.\n\nSuba a stack com `docker compose up -d --build`. Os leitos vêm dos seeders (UTI-01..UTI-06, ENF-01..ENF-12, APT-01..APT-04) e sete nascem ocupados por sorteio — rode a listagem primeiro e ajuste `bed_code` no Base Environment para um leito livre.",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_hospital_base",
+      "_type": "environment",
+      "parentId": "wrk_hospital_beds",
+      "name": "Base Environment",
+      "data": {
+        "host": "http://localhost:8080",
+        "base_url": "http://localhost:8080/api",
+        "bed_code": "UTI-01",
+        "bed_code_target": "ENF-07",
+        "cpf": "529.982.247-25",
+        "patient_name": "Maria Andrade"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "host",
+          "base_url",
+          "bed_code",
+          "bed_code_target",
+          "cpf",
+          "patient_name"
+        ]
+      },
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 1
+    },
+    {
+      "_id": "jar_hospital",
+      "_type": "cookie_jar",
+      "parentId": "wrk_hospital_beds",
+      "name": "Default Jar",
+      "cookies": []
+    },
+    {
+      "_id": "req_occupy",
+      "_type": "request",
+      "parentId": "wrk_hospital_beds",
+      "name": "Incluir paciente em um leito",
+      "description": "201 Created.\n\nO paciente é criado na primeira internação e reaproveitado pelo CPF nas seguintes — o desafio dispensa CRUD de pacientes.\n\n409 BED_ALREADY_OCCUPIED se o leito estiver ocupado; 409 PATIENT_ALREADY_ADMITTED se o paciente já estiver em outro leito.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/beds/{{ _.bed_code }}/occupation",
+      "headers": [
+        {
+          "id": "pair_req_occupy_accept",
+          "name": "Accept",
+          "value": "application/json"
+        },
+        {
+          "id": "pair_req_occupy_ct",
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "authentication": {},
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cpf\": \"{{ _.cpf }}\",\n  \"name\": \"{{ _.patient_name }}\"\n}"
+      },
+      "preRequestScript": "",
+      "afterResponseScript": "",
+      "metaSortKey": -100,
+      "isPrivate": false,
+      "pathParameters": [],
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_release",
+      "_type": "request",
+      "parentId": "wrk_hospital_beds",
+      "name": "Desocupar um leito",
+      "description": "200 OK. Encerra a ocupação com motivo `discharge`.\n\n409 BED_NOT_OCCUPIED se o leito já estiver livre.",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/beds/{{ _.bed_code }}/occupation",
+      "headers": [
+        {
+          "id": "pair_req_release_accept",
+          "name": "Accept",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "authentication": {},
+      "body": {},
+      "preRequestScript": "",
+      "afterResponseScript": "",
+      "metaSortKey": -200,
+      "isPrivate": false,
+      "pathParameters": [],
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_transfer",
+      "_type": "request",
+      "parentId": "wrk_hospital_beds",
+      "name": "Transferir paciente para outro leito",
+      "description": "201 Created.\n\nEncerra a ocupação atual com motivo `transfer` e abre a nova na mesma transação: o paciente nunca fica sem leito num estado intermediário.\n\n409 se o destino estiver ocupado; 422 TRANSFER_TO_SAME_BED se for o leito atual.",
+      "method": "POST",
+      "url": "{{ _.base_url }}/transfers",
+      "headers": [
+        {
+          "id": "pair_req_transfer_accept",
+          "name": "Accept",
+          "value": "application/json"
+        },
+        {
+          "id": "pair_req_transfer_ct",
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "authentication": {},
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"cpf\": \"{{ _.cpf }}\",\n  \"to_bed\": \"{{ _.bed_code_target }}\"\n}"
+      },
+      "preRequestScript": "",
+      "afterResponseScript": "",
+      "metaSortKey": -300,
+      "isPrivate": false,
+      "pathParameters": [],
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_patient_bed",
+      "_type": "request",
+      "parentId": "wrk_hospital_beds",
+      "name": "Descobrir o leito de um paciente pelo CPF",
+      "description": "200 OK. Aceita o CPF com ou sem formatação.\n\n404 PATIENT_NOT_FOUND se o CPF não existe; 404 PATIENT_NOT_ADMITTED se existe mas não está internado; 422 INVALID_CPF se o dígito verificador não bate.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/patients/{{ _.cpf }}/bed",
+      "headers": [
+        {
+          "id": "pair_req_patient_bed_accept",
+          "name": "Accept",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "authentication": {},
+      "body": {},
+      "preRequestScript": "",
+      "afterResponseScript": "",
+      "metaSortKey": -400,
+      "isPrivate": false,
+      "pathParameters": [],
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_bed_status",
+      "_type": "request",
+      "parentId": "wrk_hospital_beds",
+      "name": "Status de ocupação de um leito",
+      "description": "200 OK. O `status` é derivado da existência de uma ocupação ativa, não de uma coluna.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/beds/{{ _.bed_code }}",
+      "headers": [
+        {
+          "id": "pair_req_bed_status_accept",
+          "name": "Accept",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "authentication": {},
+      "body": {},
+      "preRequestScript": "",
+      "afterResponseScript": "",
+      "metaSortKey": -500,
+      "isPrivate": false,
+      "pathParameters": [],
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_list",
+      "_type": "request",
+      "parentId": "wrk_hospital_beds",
+      "name": "Listar leitos com status",
+      "description": "200 OK, paginado e ordenado por setor e código.\n\nOs filtros estão como parâmetros desabilitados — ligue na aba Query o que quiser usar.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/beds",
+      "headers": [
+        {
+          "id": "pair_req_list_accept",
+          "name": "Accept",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [
+        {
+          "id": "pair_list_status",
+          "name": "status",
+          "value": "free",
+          "disabled": true,
+          "description": "free ou occupied"
+        },
+        {
+          "id": "pair_list_sector",
+          "name": "sector",
+          "value": "Enfermaria",
+          "disabled": true,
+          "description": "UTI, Enfermaria ou Apartamento"
+        },
+        {
+          "id": "pair_list_per_page",
+          "name": "per_page",
+          "value": "30",
+          "disabled": true,
+          "description": "1 a 100, padrão 15"
+        }
+      ],
+      "authentication": {},
+      "body": {},
+      "preRequestScript": "",
+      "afterResponseScript": "",
+      "metaSortKey": -600,
+      "isPrivate": false,
+      "pathParameters": [],
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_history",
+      "_type": "request",
+      "parentId": "wrk_hospital_beds",
+      "name": "Histórico de ocupações do leito",
+      "description": "200 OK. Rota extra, fora do enunciado: como a ocupação é uma entidade com histórico, altas e transferências ficam registradas sem custo adicional.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/beds/{{ _.bed_code }}/occupations",
+      "headers": [
+        {
+          "id": "pair_req_history_accept",
+          "name": "Accept",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "authentication": {},
+      "body": {},
+      "preRequestScript": "",
+      "afterResponseScript": "",
+      "metaSortKey": -700,
+      "isPrivate": false,
+      "pathParameters": [],
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    }
+  ]
+}

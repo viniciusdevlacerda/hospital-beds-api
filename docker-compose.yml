@@ -1,0 +1,82 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: hospital-app
+    restart: unless-stopped
+    volumes:
+      - .:/var/www/html
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-hospital}
+      DB_USERNAME: ${DB_USERNAME:-hospital}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+    networks:
+      - hospital
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: hospital-nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - hospital
+
+  database:
+    image: postgres:16-alpine
+    container_name: hospital-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-hospital}
+      POSTGRES_USER: ${DB_USERNAME:-hospital}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    ports:
+      - "${DB_FORWARD_PORT:-5432}:5432"
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-hospital} -d ${DB_DATABASE:-hospital}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hospital
+
+  swagger:
+    image: swaggerapi/swagger-ui:latest
+    container_name: hospital-swagger
+    restart: unless-stopped
+    ports:
+      - "${SWAGGER_PORT:-8081}:8080"
+    environment:
+      SWAGGER_JSON: /spec/openapi.yaml
+    volumes:
+      - ./openapi.yaml:/spec/openapi.yaml:ro
+    networks:
+      - hospital
+
+networks:
+  hospital:
+    driver: bridge
+
+volumes:
+  database-data:

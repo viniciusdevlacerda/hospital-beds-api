@@ -1,0 +1,351 @@
+openapi: 3.0.3
+
+info:
+  title: Hospital Beds API
+  description: |
+    API para gerenciamento da ocupação de leitos hospitalares.
+
+    Regras garantidas pelo banco de dados (índices únicos parciais):
+      - um leito só pode ter um paciente por vez;
+      - um paciente não pode ocupar mais de um leito ao mesmo tempo.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api
+    description: Ambiente local (Docker)
+
+tags:
+  - name: Leitos
+  - name: Ocupação
+  - name: Pacientes
+
+paths:
+  /beds:
+    get:
+      tags: [Leitos]
+      summary: Lista os leitos com o respectivo status de ocupação
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [free, occupied]
+        - name: sector
+          in: query
+          schema:
+            type: string
+          example: UTI
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 15
+      responses:
+        '200':
+          description: Página de leitos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bed'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /beds/{code}:
+    get:
+      tags: [Leitos]
+      summary: Descobre o status de ocupação de um leito
+      parameters:
+        - $ref: '#/components/parameters/BedCode'
+      responses:
+        '200':
+          description: Leito encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Bed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /beds/{code}/occupations:
+    get:
+      tags: [Leitos]
+      summary: Histórico de ocupações do leito
+      parameters:
+        - $ref: '#/components/parameters/BedCode'
+      responses:
+        '200':
+          description: Página de ocupações, da mais recente para a mais antiga
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Occupation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /beds/{code}/occupation:
+    post:
+      tags: [Ocupação]
+      summary: Inclui um paciente em um leito
+      description: |
+        O paciente é criado na primeira internação e reaproveitado pelo CPF nas
+        seguintes, já que o desafio dispensa um CRUD de pacientes.
+      parameters:
+        - $ref: '#/components/parameters/BedCode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cpf, name]
+              properties:
+                cpf:
+                  type: string
+                  description: Com ou sem formatação
+                  example: '529.982.247-25'
+                name:
+                  type: string
+                  example: Maria Andrade
+      responses:
+        '201':
+          description: Paciente internado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Occupation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Leito ocupado (BED_ALREADY_OCCUPIED) ou paciente já internado (PATIENT_ALREADY_ADMITTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+    delete:
+      tags: [Ocupação]
+      summary: Desocupa um leito, dando alta ao paciente
+      parameters:
+        - $ref: '#/components/parameters/BedCode'
+      responses:
+        '200':
+          description: Ocupação encerrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Occupation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: O leito já está livre (BED_NOT_OCCUPIED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /transfers:
+    post:
+      tags: [Ocupação]
+      summary: Transfere um paciente para outro leito
+      description: |
+        Encerra a ocupação atual com motivo `transfer` e abre a nova na mesma
+        transação: o paciente nunca fica sem leito em um estado intermediário.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cpf, to_bed]
+              properties:
+                cpf:
+                  type: string
+                  example: '529.982.247-25'
+                to_bed:
+                  type: string
+                  example: ENF-07
+      responses:
+        '201':
+          description: Nova ocupação criada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Occupation'
+        '404':
+          description: Leito de destino, paciente inexistente ou paciente não internado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Leito de destino ocupado (BED_ALREADY_OCCUPIED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Transferência para o mesmo leito (TRANSFER_TO_SAME_BED) ou dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /patients/{cpf}/bed:
+    get:
+      tags: [Pacientes]
+      summary: Descobre o leito de um paciente a partir do CPF
+      parameters:
+        - name: cpf
+          in: path
+          required: true
+          schema:
+            type: string
+          example: '52998224725'
+      responses:
+        '200':
+          description: Leito ocupado pelo paciente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Bed'
+        '404':
+          description: Paciente inexistente (PATIENT_NOT_FOUND) ou não internado (PATIENT_NOT_ADMITTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: CPF inválido (INVALID_CPF)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  parameters:
+    BedCode:
+      name: code
+      in: path
+      required: true
+      description: Código do leito
+      schema:
+        type: string
+      example: UTI-01
+
+  responses:
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationFailed:
+      description: Dados inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Bed:
+      type: object
+      properties:
+        code:
+          type: string
+          example: UTI-01
+        sector:
+          type: string
+          example: UTI
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [free, occupied]
+        status_label:
+          type: string
+          example: Ocupado
+        occupation:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Occupation'
+
+    Occupation:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 12
+        active:
+          type: boolean
+        occupied_at:
+          type: string
+          format: date-time
+        released_at:
+          type: string
+          format: date-time
+          nullable: true
+        release_reason:
+          type: string
+          enum: [discharge, transfer]
+          nullable: true
+        bed:
+          type: object
+          properties:
+            code:
+              type: string
+            sector:
+              type: string
+        patient:
+          type: object
+          properties:
+            name:
+              type: string
+            cpf:
+              type: string
+              example: '529.982.247-25'
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: BED_ALREADY_OCCUPIED
+            message:
+              type: string
+              example: O leito UTI-01 já está ocupado.
+            details:
+              type: object
+              additionalProperties: true
